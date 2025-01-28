@@ -1,20 +1,17 @@
 use std::{
     env,
     fs::{DirEntry, read_dir},
-    ptr::from_ref,
-    time::Duration,
 };
 
 use anyhow::{bail, Context, Result};
 use iroh::endpoint::{Connection, RecvStream, SendStream};
 use tokio::{
-    fs::{create_dir, create_dir_all},
-    io::{copy, Interest},
+    fs::create_dir_all,
+    io::copy,
     net::{UnixListener, UnixStream},
     spawn,
-    time::sleep,
 };
-use users::{get_current_uid, get_user_by_uid};
+use users::get_current_uid;
 
 use crate::protocol::{EasyCodeRead, EasyCodeWrite};
 
