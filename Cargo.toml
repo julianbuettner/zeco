@@ -1,0 +1,14 @@
+[package]
+name = "zeco"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.95"
+bincode = "1.3.3"
+clap = { version = "4.5.27", features = ["derive"] }
+iroh = "0.31.0"
+rand = "0.8.5"
+serde = { version = "1.0.217", features = ["derive"] }
+tokio = { version = "1.43.0", features = ["net"] }
+users = "0.11.0"
