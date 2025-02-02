@@ -24,7 +24,7 @@ pub struct ZellijSessionInfo {
 }
 
 fn base_path() -> Result<PathBuf> {
-    let mut p : PathBuf = env::var("XDG_RUNTIME_DIR")
+    let mut p: PathBuf = env::var("XDG_RUNTIME_DIR")
         .context("XDG_RUNTIME_DIR is not defined.")
         .map(Into::into)?;
     p.push("zellij");
@@ -45,7 +45,7 @@ pub fn get_current_session() -> Result<ZellijSessionInfo> {
     for entry in read_dir(&zellij_base_path)? {
         version_dirs.push(entry?);
     }
-    if version_dirs.len() == 0 {
+    if version_dirs.is_empty() {
         bail!("Directory {:?} was empty unexpectedly.", zellij_base_path);
     }
     if version_dirs.len() > 1 {

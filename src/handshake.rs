@@ -1,9 +1,9 @@
 // Our goal is to establish two iroh::Connections
 // for the host and the guest.
 
-use anyhow::{Result, bail};
-use iroh::{Endpoint, NodeId, SecretKey, endpoint::Incoming};
-use rand::{Rng, distributions::Alphanumeric, rngs::OsRng, thread_rng};
+use anyhow::{bail, Result};
+use iroh::{endpoint::Incoming, Endpoint, NodeId, SecretKey};
+use rand::{distributions::Alphanumeric, rngs::OsRng, thread_rng, Rng};
 use std::str::FromStr;
 
 use crate::zellij::{self, get_current_session};
@@ -46,7 +46,7 @@ pub async fn handshake_host() -> Result<()> {
     println!("Connection established.");
 
     let (mut send, mut recv) = connection.accept_bi().await?;
-    assert_eq!(psk.as_bytes().len(), 32);
+    assert_eq!(psk.len(), 32); // String::length is in bytes
     let mut buf = [0; 32];
     recv.read_exact(&mut buf).await?;
     if buf != psk.as_bytes() {

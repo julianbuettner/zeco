@@ -1,6 +1,6 @@
 use anyhow::Result;
 use iroh::endpoint::{RecvStream, SendStream};
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Serialize};
 
 pub trait EasyCodeWrite {
     async fn struct_write<T: Serialize>(&mut self, t: &T) -> Result<()>;
@@ -20,7 +20,7 @@ impl EasyCodeWrite for SendStream {
     }
 }
 
-impl<'de> EasyCodeRead<'de> for RecvStream {
+impl EasyCodeRead<'_> for RecvStream {
     async fn struct_read<T: DeserializeOwned>(&mut self) -> Result<T> {
         let mut length_bytes = [0; 4];
         self.read_exact(&mut length_bytes).await?;

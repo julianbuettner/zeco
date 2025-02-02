@@ -2,8 +2,8 @@ use std::process::exit;
 
 use clap::Parser;
 mod handshake;
-mod zellij;
 mod protocol;
+mod zellij;
 
 #[derive(Debug, Parser)]
 pub struct JoinArgs {
