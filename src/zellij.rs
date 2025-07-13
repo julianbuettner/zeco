@@ -1,7 +1,6 @@
 use std::{
-    env,
-    fs::{read_dir, DirEntry},
-    path::PathBuf,
+    env::{self},
+    process::Command,
 };
 
 use anyhow::{bail, Context, Result};
@@ -12,7 +11,7 @@ use tokio::{
     net::{UnixListener, UnixStream},
     spawn,
 };
-use users::get_current_uid;
+use zellij_utils::consts::ZELLIJ_SOCK_DIR;
 
 use crate::protocol::{EasyCodeRead, EasyCodeWrite};
 
@@ -23,40 +22,25 @@ pub struct ZellijSessionInfo {
     pub path: String,
 }
 
-fn base_path() -> Result<PathBuf> {
-    let mut p: PathBuf = env::var("XDG_RUNTIME_DIR")
-        .context("XDG_RUNTIME_DIR is not defined.")
-        .map(Into::into)?;
-    p.push("zellij");
-    Ok(p)
+fn get_current_version() -> Result<String> {
+    let bytes = Command::new("zellij")
+        .arg("-V")
+        .output()
+        .context("Failed to execute zellij -V")?
+        .stdout;
+    let ver = String::from_utf8_lossy(&bytes);
+    Ok(ver.replace("zellij", "").trim().to_string())
 }
 
 pub fn get_current_session() -> Result<ZellijSessionInfo> {
-    let zellij_base_path = base_path()?;
-    let session_name = env::var("ZELLIJ_SESSION_NAME");
-    if session_name.is_err() {
+    let Ok(session_name) = env::var("ZELLIJ_SESSION_NAME") else {
         bail!(
             "Could not find ZELLIJ_SESSION_NAME in environment. \
             Please run this command from within your active zellij session."
         )
-    }
-    let session_name = session_name.unwrap();
-    let mut version_dirs: Vec<DirEntry> = Vec::new();
-    for entry in read_dir(&zellij_base_path)? {
-        version_dirs.push(entry?);
-    }
-    if version_dirs.is_empty() {
-        bail!("Directory {:?} was empty unexpectedly.", zellij_base_path);
-    }
-    if version_dirs.len() > 1 {
-        bail!(
-            "Multiple directories found, where one was expected: {:?}",
-            version_dirs
-        );
-    }
-    let mut path = version_dirs.pop().unwrap().path();
-    let version = path.file_name().unwrap().to_string_lossy().to_string();
-    path.push(&session_name);
+    };
+    let version = get_current_version()?;
+    let path = ZELLIJ_SOCK_DIR.join(&session_name);
     if !std::fs::exists(&path)? {
         bail!("Expected file {} to exist.", path.to_string_lossy());
     }
@@ -124,11 +108,11 @@ pub async fn join(c: Connection) -> Result<()> {
     );
 
     let remote_session_name = format!("{}-remote", name);
-    let dir = format!("/run/user/{}/zellij/{}", get_current_uid(), version);
+    let dir = &*ZELLIJ_SOCK_DIR;
     create_dir_all(&dir)
         .await
         .context("Failed to create zellij directory")?;
-    let local_socket = format!("{}/{}", dir, remote_session_name);
+    let local_socket = dir.join(&remote_session_name);
     let listener = UnixListener::bind(local_socket).context("Failed to create socket file.")?;
     println!("Join session with");
     println!("\tzellij a {}", remote_session_name);
