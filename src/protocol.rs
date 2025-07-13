@@ -1,4 +1,5 @@
 use anyhow::Result;
+use bincode::config;
 use iroh::endpoint::{RecvStream, SendStream};
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -12,7 +13,7 @@ pub trait EasyCodeRead<'de> {
 
 impl EasyCodeWrite for SendStream {
     async fn struct_write<T: Serialize>(&mut self, t: &T) -> Result<()> {
-        let v: Vec<u8> = bincode::serialize(t).unwrap();
+        let v: Vec<u8> = bincode::serde::encode_to_vec(t, config::standard()).unwrap();
         let size = v.len() as u32;
         self.write_all(&size.to_be_bytes()).await?;
         self.write_all(&v).await?;
@@ -27,7 +28,7 @@ impl EasyCodeRead<'_> for RecvStream {
         let length = u32::from_be_bytes(length_bytes);
         let mut v = vec![0; length as usize];
         self.read_exact(&mut v).await?;
-        let t: T = bincode::deserialize(&v)?;
+        let (t, _): (T, usize) = bincode::serde::decode_from_slice(&v, config::standard())?;
         Ok(t)
     }
 }
