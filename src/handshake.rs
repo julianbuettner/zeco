@@ -3,7 +3,7 @@
 
 use anyhow::{bail, Result};
 use iroh::{endpoint::Incoming, Endpoint, NodeId, SecretKey};
-use rand::{distributions::Alphanumeric, rngs::OsRng, Rng};
+use rand::{distributions::Alphanumeric, rngs::OsRng, thread_rng, Rng};
 use std::str::FromStr;
 
 use crate::zellij::{self, get_current_session};
@@ -12,12 +12,12 @@ const ALPN: &[u8] = &[3, 1, 4, 1, 5, 9, 2, 6];
 
 async fn init_endpoint() -> Result<Endpoint> {
     let secret_key = SecretKey::generate(OsRng);
-    Ok(Endpoint::builder()
+    Endpoint::builder()
         .secret_key(secret_key)
         .discovery_n0()
         .alpns(vec![ALPN.to_vec()])
         .bind()
-        .await?)
+        .await
 }
 
 pub async fn handshake_host() -> Result<()> {
@@ -27,7 +27,7 @@ pub async fn handshake_host() -> Result<()> {
         zellij_info.name, zellij_info.version
     );
 
-    let psk: String = rand::thread_rng()
+    let psk: String = thread_rng()
         .sample_iter(&Alphanumeric)
         .take(32)
         .map(char::from)
