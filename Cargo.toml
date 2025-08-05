@@ -1,6 +1,6 @@
 [package]
 name = "zeco"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 
 authors = ["Julian Büttner <git@julianbuettner.dev>"]
@@ -13,6 +13,7 @@ description = "zellij attach via the internet, peer to peer, end-to-end encrypte
 anyhow = "1.0.95"
 bincode = "1.3.3"
 clap = { version = "4.5.27", features = ["derive"] }
+directories = "6.0.0"
 iroh = "0.31.0"
 rand = "0.8.5"
 serde = { version = "1.0.217", features = ["derive"] }

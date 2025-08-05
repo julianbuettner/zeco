@@ -5,6 +5,7 @@ use std::{
 };
 
 use anyhow::{bail, Context, Result};
+use directories::ProjectDirs;
 use iroh::endpoint::{Connection, RecvStream, SendStream};
 use tokio::{
     fs::create_dir_all,
@@ -23,16 +24,28 @@ pub struct ZellijSessionInfo {
     pub path: String,
 }
 
-fn base_path() -> Result<PathBuf> {
-    let mut p: PathBuf = env::var("XDG_RUNTIME_DIR")
-        .context("XDG_RUNTIME_DIR is not defined.")
-        .map(Into::into)?;
-    p.push("zellij");
-    Ok(p)
+fn get_base_path() -> Result<PathBuf> {
+    if let Ok(p) = env::var("ZELLIJ_SOCKET_DIR") {
+        return Ok(p.into());
+    }
+
+    let zellij_proj_dir = ProjectDirs::from("org", "Zellij Contributors", "Zellij");
+    if zellij_proj_dir.is_none() {
+        bail!("Unexpected environment. Your OS platform is not supported. Please open a issue on GitHub.")
+    }
+    let zellij_proj_dir = zellij_proj_dir.unwrap();
+
+    if zellij_proj_dir.runtime_dir().is_none() {
+        bail!(
+            "You OS platform is currently not supported. \
+            Please open an issue on GitHub."
+        )
+    }
+    Ok(zellij_proj_dir.runtime_dir().unwrap().into())
 }
 
 pub fn get_current_session() -> Result<ZellijSessionInfo> {
-    let zellij_base_path = base_path()?;
+    let zellij_base_path = get_base_path()?;
     let session_name = env::var("ZELLIJ_SESSION_NAME");
     if session_name.is_err() {
         bail!(
@@ -41,28 +54,29 @@ pub fn get_current_session() -> Result<ZellijSessionInfo> {
         )
     }
     let session_name = session_name.unwrap();
-    let mut version_dirs: Vec<DirEntry> = Vec::new();
+
+    let mut socket_file = None;
+    let mut version = None;
     for entry in read_dir(&zellij_base_path)? {
-        version_dirs.push(entry?);
+        let entry = entry?;
+        let mut potential_socket_file: PathBuf = entry.path();
+        potential_socket_file.push(session_name.to_string());
+        dbg!(&potential_socket_file);
+        if potential_socket_file.exists() {
+            socket_file = Some(potential_socket_file);
+            version = Some(entry.file_name());
+            break;
+        }
     }
-    if version_dirs.is_empty() {
-        bail!("Directory {:?} was empty unexpectedly.", zellij_base_path);
+    if socket_file.is_none() {
+        bail!("Could not find the socket for your current zellij session. This is a bug.");
     }
-    if version_dirs.len() > 1 {
-        bail!(
-            "Multiple directories found, where one was expected: {:?}",
-            version_dirs
-        );
-    }
-    let mut path = version_dirs.pop().unwrap().path();
-    let version = path.file_name().unwrap().to_string_lossy().to_string();
-    path.push(&session_name);
-    if !std::fs::exists(&path)? {
-        bail!("Expected file {} to exist.", path.to_string_lossy());
-    }
+    let socket_file = socket_file.unwrap();
+    let version = version.unwrap();
+
     Ok(ZellijSessionInfo {
-        path: path.to_string_lossy().to_string(),
-        version,
+        path: socket_file.to_string_lossy().to_string(),
+        version: version.to_string_lossy().to_string(),
         name: session_name,
     })
 }
