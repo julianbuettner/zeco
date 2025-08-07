@@ -1,6 +1,6 @@
 use std::{
-    env,
-    fs::{read_dir, DirEntry},
+    env::{self, temp_dir},
+    fs::read_dir,
     path::PathBuf,
 };
 
@@ -25,23 +25,26 @@ pub struct ZellijSessionInfo {
 }
 
 fn get_base_path() -> Result<PathBuf> {
+    // Env override
     if let Ok(p) = env::var("ZELLIJ_SOCKET_DIR") {
         return Ok(p.into());
     }
 
+    // Linux
     let zellij_proj_dir = ProjectDirs::from("org", "Zellij Contributors", "Zellij");
     if zellij_proj_dir.is_none() {
         bail!("Unexpected environment. Your OS platform is not supported. Please open a issue on GitHub.")
     }
     let zellij_proj_dir = zellij_proj_dir.unwrap();
-
-    if zellij_proj_dir.runtime_dir().is_none() {
-        bail!(
-            "You OS platform is currently not supported. \
-            Please open an issue on GitHub."
-        )
+    if let Some(d) = zellij_proj_dir.runtime_dir() {
+        return Ok(d.into());
     }
-    Ok(zellij_proj_dir.runtime_dir().unwrap().into())
+
+    // Mac OS / special Unix
+    let uid = nix::unistd::Uid::current();
+    let zellij_tmp_dir: PathBuf = temp_dir().join(format!("zellij-{uid}"));
+
+    Ok(zellij_tmp_dir)
 }
 
 pub fn get_current_session() -> Result<ZellijSessionInfo> {
@@ -60,8 +63,7 @@ pub fn get_current_session() -> Result<ZellijSessionInfo> {
     for entry in read_dir(&zellij_base_path)? {
         let entry = entry?;
         let mut potential_socket_file: PathBuf = entry.path();
-        potential_socket_file.push(session_name.to_string());
-        dbg!(&potential_socket_file);
+        potential_socket_file.push(&session_name);
         if potential_socket_file.exists() {
             socket_file = Some(potential_socket_file);
             version = Some(entry.file_name());
@@ -133,19 +135,18 @@ pub async fn join(c: Connection) -> Result<()> {
     let version: String = s.struct_read().await?;
     let name: String = s.struct_read().await?;
     println!(
-        "Remote Session is {}. You too are expected to use version {}.",
-        name, version
+        "Remote Session is {name}. You too are expected to use version {version}."
     );
 
-    let remote_session_name = format!("{}-remote", name);
+    let remote_session_name = format!("{name}-remote");
     let dir = format!("/run/user/{}/zellij/{}", get_current_uid(), version);
     create_dir_all(&dir)
         .await
         .context("Failed to create zellij directory")?;
-    let local_socket = format!("{}/{}", dir, remote_session_name);
+    let local_socket = format!("{dir}/{remote_session_name}");
     let listener = UnixListener::bind(local_socket).context("Failed to create socket file.")?;
     println!("Join session with");
-    println!("\tzellij a {}", remote_session_name);
+    println!("\tzellij a {remote_session_name}");
     loop {
         match listener.accept().await {
             Ok((stream, _)) => {

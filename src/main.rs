@@ -28,7 +28,7 @@ async fn main() {
     };
     if let Err(e) = res {
         println!("Error, terminated due to:");
-        println!("{}", e);
+        println!("{e}");
         exit(1);
     }
 }
