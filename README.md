@@ -33,7 +33,7 @@ zellij attach <remote-session>
 Zellij has a server client architecture. This usually works over a linux socket,
 but in theory (and in practice) access to the socket can be proxied.
 
-Zeco uses [Iroh](https://www.iroh.computer/) to establish a end-to-end encrypted
+Zeco uses [Iroh](https://www.iroh.computer/) to establish an end-to-end encrypted
 peer to peer connection. Iroh bootstraps this connection via their servers
 and the protocol is based on QUIC.
 The host id basically is a generated public key of the host.
