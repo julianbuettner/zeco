@@ -7,7 +7,7 @@ mod zellij;
 
 #[derive(Debug, Parser)]
 pub struct JoinArgs {
-    #[arg(help = "Peer to peer Node ID of the host you want to join")]
+    #[arg(help = "Peer to peer Endpoint ID of the host you want to join")]
     host: String,
     #[arg(help = "Pre Shared Secret, also provided by the host")]
     secret: String,
