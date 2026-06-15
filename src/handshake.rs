@@ -2,8 +2,11 @@
 // for the host and the guest.
 
 use anyhow::{bail, Result};
-use iroh::{endpoint::Incoming, Endpoint, NodeId, SecretKey};
-use rand::{distributions::Alphanumeric, rngs::OsRng, thread_rng, Rng};
+use iroh::{
+    endpoint::{presets, Incoming},
+    Endpoint, EndpointId, SecretKey,
+};
+use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use std::str::FromStr;
 
 use crate::zellij::{self, get_current_session};
@@ -11,13 +14,13 @@ use crate::zellij::{self, get_current_session};
 const ALPN: &[u8] = &[3, 1, 4, 1, 5, 9, 2, 6];
 
 async fn init_endpoint() -> Result<Endpoint> {
-    let secret_key = SecretKey::generate(OsRng);
-    Endpoint::builder()
+    let secret_key = SecretKey::generate();
+    Endpoint::builder(presets::N0)
         .secret_key(secret_key)
-        .discovery_n0()
         .alpns(vec![ALPN.to_vec()])
         .bind()
         .await
+        .map_err(|e| anyhow::anyhow!("failed to bind iroh endpoint: {e}"))
 }
 
 pub async fn handshake_host() -> Result<()> {
@@ -34,7 +37,7 @@ pub async fn handshake_host() -> Result<()> {
         .collect();
     let endpoint = init_endpoint().await?;
     println!("The client now can join with the following command:");
-    println!("\tzeco join {} {}", endpoint.node_id(), psk);
+    println!("\tzeco join {} {}", endpoint.id(), psk);
     println!(
         "WARNING! Everyone with these credentials can execute arbitrary commands in your shell. \
         Only hand over to people you fully trust."
@@ -63,10 +66,10 @@ pub async fn handshake_host() -> Result<()> {
 }
 
 pub async fn handshake_guest(node_id: &str, secret: &str) -> Result<()> {
-    let node_id: NodeId = NodeId::from_str(node_id)?;
+    let endpoint_id: EndpointId = EndpointId::from_str(node_id)?;
     let endpoint = init_endpoint().await?;
 
-    let connection = endpoint.connect(node_id, ALPN).await?;
+    let connection = endpoint.connect(endpoint_id, ALPN).await?;
     let (mut send, mut recv) = connection.open_bi().await?;
     send.write_all(secret.as_bytes()).await?;
     send.finish()?;

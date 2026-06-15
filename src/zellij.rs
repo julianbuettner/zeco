@@ -134,9 +134,7 @@ pub async fn join(c: Connection) -> Result<()> {
     let mut s = c.accept_uni().await?;
     let version: String = s.struct_read().await?;
     let name: String = s.struct_read().await?;
-    println!(
-        "Remote Session is {name}. You too are expected to use version {version}."
-    );
+    println!("Remote Session is {name}. You too are expected to use version {version}.");
 
     let remote_session_name = format!("{name}-remote");
     let dir = format!("/run/user/{}/zellij/{}", get_current_uid(), version);
