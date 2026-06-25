@@ -19,4 +19,3 @@ nix = { version = "0.30.1", features = ["user"] }
 rand = "0.8.5"
 serde = { version = "1.0.217", features = ["derive"] }
 tokio = { version = "1.43.0", features = ["net"] }
-users = "0.11.0"
