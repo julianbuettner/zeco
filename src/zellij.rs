@@ -13,7 +13,6 @@ use tokio::{
     net::{UnixListener, UnixStream},
     spawn,
 };
-use users::get_current_uid;
 
 use crate::protocol::{EasyCodeRead, EasyCodeWrite};
 
@@ -137,7 +136,7 @@ pub async fn join(c: Connection) -> Result<()> {
     println!("Remote Session is {name}. You too are expected to use version {version}.");
 
     let remote_session_name = format!("{name}-remote");
-    let dir = format!("/run/user/{}/zellij/{}", get_current_uid(), version);
+    let dir = get_base_path()?.join(version).display().to_string();
     create_dir_all(&dir)
         .await
         .context("Failed to create zellij directory")?;
