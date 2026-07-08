@@ -1,6 +1,7 @@
 use std::{
     env::{self, temp_dir},
     fs::read_dir,
+    io::ErrorKind,
     path::PathBuf,
 };
 
@@ -139,15 +140,53 @@ impl GuardedSocket {
         Ok(self.listener.as_ref().unwrap().accept().await?)
     }
 
-    fn bind(path: PathBuf) -> Result<GuardedSocket> {
+    async fn bind(path: PathBuf) -> Result<GuardedSocket> {
+        Self::remove_if_stale(&path).await?;
+
         let listener = UnixListener::bind(&path).context(format!(
             "Failed to create socket file at {}.",
             &path.display()
         ))?;
+
         Ok(GuardedSocket {
             listener: Some(listener),
             path,
         })
+    }
+
+    async fn remove_if_stale(path: &PathBuf) -> Result<()> {
+        // Check to see if a socket already exists and is live
+        let err = match UnixStream::connect(&path).await {
+            Ok(_) => {
+                // success means the socket is live, so something else is using it
+                bail!("Another process is using the live socket at {} -- is another zeco client already running and connected to the same session?", &path.display())
+            }
+            Err(e) => e,
+        };
+
+        match err.kind() {
+            ErrorKind::NotFound | ErrorKind::ConnectionRefused => {}
+            _ => {
+                bail!(
+                    "Couldn't check whether socket file already exists and is live: {}",
+                    err
+                )
+            }
+        };
+
+        // socket file is stale/dangling symlink/nonexistent, safe to remove
+        if let Err(e) = std::fs::remove_file(path) {
+            if e.kind() == ErrorKind::NotFound {
+                // file doesn't exist, carry on
+            } else {
+                bail!(
+                    "Couldn't cleanup an existing socket file before attempting connection: {}",
+                    e
+                )
+            }
+        };
+
+        Ok(())
     }
 }
 
@@ -177,7 +216,7 @@ pub async fn join(c: Connection) -> Result<()> {
         .context("Failed to create zellij directory")?;
     let remote_session_name = format!("{name}-remote");
     let local_socket_path = dir.join(&remote_session_name);
-    let guarded_socket = GuardedSocket::bind(local_socket_path)?;
+    let guarded_socket = GuardedSocket::bind(local_socket_path).await?;
     println!("Join session with");
     println!("\tzellij a {remote_session_name}");
     loop {
