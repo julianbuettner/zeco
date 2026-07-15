@@ -9,6 +9,7 @@ use anyhow::{bail, Context, Result};
 use directories::ProjectDirs;
 use iroh::endpoint::{Connection, RecvStream, SendStream};
 use tokio::{fs::create_dir_all, io::copy, net::UnixStream, spawn, task::spawn_blocking};
+use tracing::{error, info};
 
 use crate::{
     guarded_socket::GuardedSocket,
@@ -142,7 +143,7 @@ pub async fn join(c: Connection, cancellation_token: &CancellationToken) -> Resu
     let mut s = c.accept_uni().await?;
     let version: String = s.struct_read().await?;
     let name: String = s.struct_read().await?;
-    println!("Remote Session is {name}. You too are expected to use version {version}.");
+    info!("Remote session is '{name}'. You too are expected to use version {version}.");
 
     let dir = get_base_path()?.join(version);
     create_dir_all(&dir)
@@ -160,7 +161,7 @@ pub async fn join(c: Connection, cancellation_token: &CancellationToken) -> Resu
                         let c = c.clone();
                         spawn(handle_zellij_socket(stream, c));
                     }
-                    Err(_) => println!("Failed to accept connection on socket."),
+                    Err(_) => error!("Failed to accept connection on socket."),
                 }
             }
             _ = cancellation_token.cancelled() => {
@@ -175,19 +176,14 @@ pub fn attach_zellij(session_name: String) {
     p.arg("attach").arg(&session_name);
     let mut handle = match p.spawn() {
         Err(e) => {
-            println!("Tried to run");
-            println!("\tzellij attach {}", session_name);
-            println!("But it failed with {}", e);
+            error!("Failed to spawn `zellij attach {session_name}`: {e}");
             return;
         }
         Ok(v) => v,
     };
     let done = handle.wait();
     if let Err(e) = done {
-        println!("zellij quit with an error:");
-        println!("\t{}", e);
+        error!("zellij quit with an error: {e}");
     }
-    println!("The connection is still open. You can rejoin the session with");
-    println!("\tzellij a {session_name}");
-    println!("or quit with Ctrl + C.")
+    info!("Connection still open. Rejoin with `zellij a {session_name}` or quit with Ctrl+C.");
 }

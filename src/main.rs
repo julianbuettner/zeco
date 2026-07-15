@@ -12,6 +12,7 @@ use tokio::{
     signal::{self, unix::SignalKind},
 };
 use tokio_util::sync::CancellationToken;
+use tracing::{error, info};
 
 #[derive(Debug, Parser)]
 pub struct JoinArgs {
@@ -29,6 +30,10 @@ pub enum Command {
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt()
+        .with_env_filter("zeco=info")
+        .init();
+
     let args = Command::parse();
     let cancellation_token = CancellationToken::new();
     tokio::spawn(listen_for_shutdown(cancellation_token.clone()));
@@ -39,8 +44,7 @@ async fn main() {
         }
     };
     if let Err(e) = res {
-        println!("Error, terminated due to:");
-        println!("{e:#}");
+        error!("Terminated due to: {e:#}");
         exit(1);
     }
 }
@@ -54,7 +58,7 @@ async fn listen_for_shutdown(cancellation_token: CancellationToken) -> Result<()
         _ = sigterm_listener.recv() => {},
     }
 
-    println!("Performing a graceful shutdown...");
+    info!("Performing a graceful shutdown...");
     cancellation_token.cancel();
     Ok(())
 }

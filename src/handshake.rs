@@ -9,6 +9,7 @@ use iroh::{
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use std::str::FromStr;
 use tokio_util::sync::CancellationToken;
+use tracing::info;
 
 use crate::zellij::{self, get_current_session};
 
@@ -26,8 +27,8 @@ async fn init_endpoint() -> Result<Endpoint> {
 
 pub async fn handshake_host(cancellation_token: &CancellationToken) -> Result<()> {
     let zellij_info = get_current_session()?;
-    println!(
-        "Sharing Zellij session {} (version {})",
+    info!(
+        "Sharing Zellij session '{}' (version {})",
         zellij_info.name, zellij_info.version
     );
 
@@ -37,17 +38,17 @@ pub async fn handshake_host(cancellation_token: &CancellationToken) -> Result<()
         .map(char::from)
         .collect();
     let endpoint = init_endpoint().await?;
-    println!("The guest now can join with the following command:");
-    println!("\tzeco join {} {}", endpoint.id(), psk);
-    println!(
+    info!("The guest can join with:");
+    info!("\tzeco join {} {}", endpoint.id(), psk);
+    info!(
         "WARNING! Everyone with these credentials can execute arbitrary commands in your shell. \
         Only hand over to people you fully trust."
     );
-    println!("Waiting for guest to join. Press Ctrl-C to quit.");
+    info!("Waiting for guest to join. Press Ctrl-C to quit.");
 
     let incoming: Incoming = endpoint.accept().await.unwrap();
     let connection = incoming.accept()?.await?;
-    println!("Connection established.");
+    info!("Connection established.");
 
     let (mut send, mut recv) = connection.accept_bi().await?;
     assert_eq!(psk.len(), 32); // String::length is in bytes
@@ -59,7 +60,7 @@ pub async fn handshake_host(cancellation_token: &CancellationToken) -> Result<()
     }
     send.write_all(&[1]).await?;
     send.finish()?;
-    println!("Guest authenticated successfully!");
+    info!("Guest authenticated successfully!");
     drop(send);
     drop(recv);
 
@@ -83,7 +84,7 @@ pub async fn handshake_guest(
     if success != [1] {
         bail!("Host declined provided secret.");
     }
-    println!("Host let you in.");
+    info!("Host let you in.");
     drop(send);
     drop(recv);
 
