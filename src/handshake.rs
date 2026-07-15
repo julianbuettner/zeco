@@ -36,7 +36,7 @@ pub async fn handshake_host() -> Result<()> {
         .map(char::from)
         .collect();
     let endpoint = init_endpoint().await?;
-    println!("The client now can join with the following command:");
+    println!("The guest now can join with the following command:");
     println!("\tzeco join {} {}", endpoint.id(), psk);
     println!(
         "WARNING! Everyone with these credentials can execute arbitrary commands in your shell. \
@@ -54,11 +54,11 @@ pub async fn handshake_host() -> Result<()> {
     recv.read_exact(&mut buf).await?;
     if buf != psk.as_bytes() {
         send.write_all(&[0]).await?;
-        bail!("Client provided wrong secret. Quit.");
+        bail!("Guest provided wrong secret. Quit.");
     }
     send.write_all(&[1]).await?;
     send.finish()?;
-    println!("Client authenticated successfully!");
+    println!("Guest authenticated successfully!");
     drop(send);
     drop(recv);
 
