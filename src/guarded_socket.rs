@@ -2,6 +2,7 @@ use std::{io::ErrorKind, path::PathBuf};
 
 use anyhow::{bail, Context, Result};
 use tokio::net::{unix::SocketAddr, UnixListener, UnixStream};
+use tracing::warn;
 
 pub struct GuardedSocket {
     listener: Option<UnixListener>,
@@ -25,6 +26,10 @@ impl GuardedSocket {
             listener: Some(listener),
             path,
         })
+    }
+
+    pub fn path(&self) -> PathBuf {
+        self.path.clone()
     }
 
     async fn remove_if_stale(path: &PathBuf) -> Result<()> {
@@ -69,10 +74,7 @@ impl Drop for GuardedSocket {
         drop(self.listener.take());
         let result = std::fs::remove_file(&self.path);
         if let Err(err) = result {
-            println!(
-                "Warning: Failed to remove socket file during cleanup: {}",
-                err
-            )
+            warn!("Failed to remove socket file during cleanup: {err}");
         }
     }
 }

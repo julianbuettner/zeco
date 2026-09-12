@@ -5,25 +5,18 @@ use std::{
     process,
 };
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use directories::ProjectDirs;
-use iroh::endpoint::{Connection, RecvStream, SendStream};
-use tokio::{fs::create_dir_all, io::copy, net::UnixStream, spawn, task::spawn_blocking};
-
-use crate::{
-    guarded_socket::GuardedSocket,
-    protocol::{EasyCodeRead, EasyCodeWrite},
-};
-use tokio_util::sync::CancellationToken;
+use tracing::{error, info};
 
 #[derive(Debug, Clone)]
 pub struct ZellijSessionInfo {
     pub name: String,
     pub version: String,
-    pub path: String,
+    pub path: PathBuf,
 }
 
-fn get_base_path() -> Result<PathBuf> {
+pub fn get_base_path() -> Result<PathBuf> {
     // Env override
     if let Ok(p) = env::var("ZELLIJ_SOCKET_DIR") {
         return Ok(p.into());
@@ -76,98 +69,10 @@ pub fn get_current_session() -> Result<ZellijSessionInfo> {
     let version = version.unwrap();
 
     Ok(ZellijSessionInfo {
-        path: socket_file.to_string_lossy().to_string(),
+        path: socket_file,
         version: version.to_string_lossy().to_string(),
         name: session_name,
     })
-}
-
-pub async fn host(
-    c: Connection,
-    z: ZellijSessionInfo,
-    cancellation_token: &CancellationToken,
-) -> Result<()> {
-    let mut s = c.open_uni().await?;
-    s.struct_write(&z.version).await?;
-    s.struct_write(&z.name).await?;
-    loop {
-        let z = z.clone();
-        tokio::select! {
-            x = c.accept_bi() => {
-                match x {
-                    Ok((send, recv)) => {
-                        spawn(handle_zellij_session(send, recv, z));
-                    }
-                    Err(e) => bail!("Failed to accept channel from guest: {:?}", e),
-                }
-            }
-            _ = cancellation_token.cancelled() => {
-                return Ok(())
-            }
-        }
-    }
-}
-
-async fn handle_zellij_session(
-    mut send: SendStream,
-    mut recv: RecvStream,
-    z: ZellijSessionInfo,
-) -> Result<()> {
-    let mut u = UnixStream::connect(z.path).await?;
-    let (mut socket_read, mut socket_write) = u.split();
-
-    let a = copy(&mut socket_read, &mut send);
-    let b = copy(&mut recv, &mut socket_write);
-
-    let (a, b) = tokio::join!(a, b);
-    a?;
-    b?;
-    Ok(())
-}
-
-async fn handle_zellij_socket(mut socket_stream: UnixStream, c: Connection) -> Result<()> {
-    let (mut iroh_send, mut iroh_recv) = c.open_bi().await?;
-    let (mut sock_read, mut sock_write) = socket_stream.split();
-
-    let a = copy(&mut sock_read, &mut iroh_send);
-    let b = copy(&mut iroh_recv, &mut sock_write);
-
-    let (a, b) = tokio::join!(a, b);
-    a?;
-    b?;
-    Ok(())
-}
-
-pub async fn join(c: Connection, cancellation_token: &CancellationToken) -> Result<()> {
-    let mut s = c.accept_uni().await?;
-    let version: String = s.struct_read().await?;
-    let name: String = s.struct_read().await?;
-    println!("Remote Session is {name}. You too are expected to use version {version}.");
-
-    let dir = get_base_path()?.join(version);
-    create_dir_all(&dir)
-        .await
-        .context("Failed to create zellij directory")?;
-    let remote_session_name = format!("{name}-remote");
-    let local_socket_path = dir.join(&remote_session_name);
-    let guarded_socket = GuardedSocket::bind(local_socket_path).await?;
-    let _t = spawn_blocking(|| attach_zellij(remote_session_name));
-    loop {
-        tokio::select! {
-            result = guarded_socket.accept() => {
-                match result {
-                    Ok((stream, _)) => {
-                        let c = c.clone();
-                        spawn(handle_zellij_socket(stream, c));
-                    }
-                    Err(_) => println!("Failed to accept connection on socket."),
-                }
-            }
-            _ = cancellation_token.cancelled() => {
-                    return Ok(())
-            }
-        }
-    }
 }
 
 pub fn attach_zellij(session_name: String) {
@@ -175,19 +80,14 @@ pub fn attach_zellij(session_name: String) {
     p.arg("attach").arg(&session_name);
     let mut handle = match p.spawn() {
         Err(e) => {
-            println!("Tried to run");
-            println!("\tzellij attach {}", session_name);
-            println!("But it failed with {}", e);
+            error!("Failed to spawn `zellij attach {session_name}`: {e}");
             return;
         }
         Ok(v) => v,
     };
     let done = handle.wait();
     if let Err(e) = done {
-        println!("zellij quit with an error:");
-        println!("\t{}", e);
+        error!("zellij quit with an error: {e}");
     }
-    println!("The connection is still open. You can rejoin the session with");
-    println!("\tzellij a {session_name}");
-    println!("or quit with Ctrl + C.")
+    info!("Connection still open. Rejoin with `zellij a {session_name}` or quit with Ctrl+C.");
 }
